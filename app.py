@@ -77,6 +77,11 @@ def telegram_webhook():
 
     nutrition = call_nutritionix(food_query)
 
+    if "foods" not in nutrition:
+        send_telegram_message(chat_id, f"❌ Nutritionix 查詢失敗，請再試一次或改用文字輸入。\n\n系統訊息：{nutrition.get('message', '未知錯誤')}")
+        return jsonify({"status": "nutritionix_error"}), 200
+
+
     summary_lines = []
     total_calories = 0
     for item in nutrition["foods"]:
