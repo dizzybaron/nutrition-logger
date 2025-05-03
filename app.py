@@ -25,10 +25,11 @@ def call_nutritionix(query_text):
     return response.json()
 
 def send_telegram_message(chat_id, text):
-    requests.post(
+    resp = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
         json={"chat_id": chat_id, "text": text}
     )
+    print("📬 Telegram response:", resp.status_code, resp.text)
 
 def get_photo_url(file_id):
     file_resp = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}")
@@ -37,7 +38,7 @@ def get_photo_url(file_id):
 
 def vision_describe_image(image_url):
     response = openai.chat.completions.create(
-        model="gpt-4-vision-preview",
+        model="gpt-4o",
         messages=[
             {"role": "user", "content": [
                 {"type": "text", "text": "請幫我看這張餐點照片，推估裡面有哪些食物與份量，用英文描述適合查詢營養資料的格式"},
@@ -56,6 +57,7 @@ def telegram_webhook():
     text = message.get("text", "")
     photos = message.get("photo", [])
 
+    print("📥 收到訊息：", text)
     meal_type = "未知"
     food_query = ""
 
@@ -78,9 +80,8 @@ def telegram_webhook():
     nutrition = call_nutritionix(food_query)
 
     if "foods" not in nutrition:
-        send_telegram_message(chat_id, f"❌ Nutritionix 查詢失敗，請再試一次或改用文字輸入。\n\n系統訊息：{nutrition.get('message', '未知錯誤')}")
+        send_telegram_message(chat_id, f"❌ Nutritionix 查詢失敗，請再試一次或改用文字輸入。\\n\\n系統訊息：{nutrition.get('message', '未知錯誤')}")
         return jsonify({"status": "nutritionix_error"}), 200
-
 
     summary_lines = []
     total_calories = 0
@@ -111,8 +112,8 @@ def telegram_webhook():
             "fat": item["nf_total_fat"],
             "carbs": item["nf_total_carbohydrate"],
             "sodium": item["nf_sodium"],
-            "source": "GPT Vision + Nutritionix",
-            "note": "由照片估算"
+            "source": "GPT-4o + Nutritionix",
+            "note": "由照片估算" if photos else ""
         })
 
     return jsonify({"status": "ok"}), 200
