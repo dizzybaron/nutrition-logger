@@ -1,10 +1,10 @@
+
 import os
 import requests
-import openai
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 NUTRITIONIX_APP_ID = os.environ.get("NUTRITIONIX_APP_ID")
 NUTRITIONIX_APP_KEY = os.environ.get("NUTRITIONIX_APP_KEY")
@@ -31,56 +31,22 @@ def send_telegram_message(chat_id, text):
     )
     print("📬 Telegram response:", resp.status_code, resp.text)
 
-def get_photo_url(file_id):
-    file_resp = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}")
-    file_path = file_resp.json()["result"]["file_path"]
-    return f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-
-def vision_describe_image(image_url):
-    response = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "user", "content": [
-                {"type": "text", "text": "請幫我看這張餐點照片，推估裡面有哪些食物與份量，用英文描述適合查詢營養資料的格式"},
-                {"type": "image_url", "image_url": {"url": image_url}}
-            ]}
-        ],
-        max_tokens=300
-    )
-    return response.choices[0].message.content
-
 @app.route('/webhook', methods=['POST'])
 def telegram_webhook():
     data = request.json
     message = data.get("message", {})
     chat_id = message.get("chat", {}).get("id")
     text = message.get("text", "")
-    photos = message.get("photo", [])
 
-    print("📥 收到訊息：", text)
-    meal_type = "未知"
-    food_query = ""
+    if not text or "：" not in text:
+        send_telegram_message(chat_id, "⚠️ 請輸入餐別與食物內容，例如：早餐：炒飯、煎蛋")
+        return jsonify({"status": "missing_text"}), 200
 
-    if text and "：" in text:
-        meal_type, food_query = text.split("：", 1)
-    elif text:
-        meal_type = text.strip()
-
-    if photos:
-        file_id = photos[-1]["file_id"]
-        image_url = get_photo_url(file_id)
-        send_telegram_message(chat_id, "🧠 分析圖片中，請稍候 5 秒...")
-        food_query = vision_describe_image(image_url)
-        send_telegram_message(chat_id, f"📷 Vision 辨識結果：\\n{food_query}")
-
-    if not food_query:
-        send_telegram_message(chat_id, "⚠️ 請提供食物描述文字或圖片。")
-        return jsonify({"status": "no_query"}), 200
-
+    meal_type, food_query = text.split("：", 1)
     nutrition = call_nutritionix(food_query)
 
     if "foods" not in nutrition:
-        send_telegram_message(chat_id, f"❌ Nutritionix 查詢失敗，請再試一次或改用文字輸入。\\n\\n系統訊息：{nutrition.get('message', '未知錯誤')}")
+        send_telegram_message(chat_id, f"❌ Nutritionix 查詢失敗。\n\n系統訊息：{nutrition.get('message', '未知錯誤')}")
         return jsonify({"status": "nutritionix_error"}), 200
 
     summary_lines = []
@@ -95,9 +61,7 @@ def telegram_webhook():
         total_calories += kcal
         summary_lines.append(f"{name}：{round(kcal)} kcal，蛋白質 {round(protein)}g，脂肪 {round(fat)}g，碳水 {round(carb)}g")
 
-    reply_text = f"✅ 餐別：{meal_type}\\n" + \
-                 "\\n".join(summary_lines) + \
-                 f"\\n\\n總熱量：約 {round(total_calories)} kcal"
+    reply_text = f"✅ 餐別：{meal_type}\n" +                  "\n".join(summary_lines) +                  f"\n\n總熱量：約 {round(total_calories)} kcal"
 
     send_telegram_message(chat_id, reply_text)
 
@@ -112,8 +76,8 @@ def telegram_webhook():
             "fat": item["nf_total_fat"],
             "carbs": item["nf_total_carbohydrate"],
             "sodium": item["nf_sodium"],
-            "source": "GPT-4o + Nutritionix",
-            "note": "由照片估算" if photos else ""
+            "source": "Nutritionix",
+            "note": "由使用者輸入文字估算"
         })
 
     return jsonify({"status": "ok"}), 200
