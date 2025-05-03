@@ -1,4 +1,3 @@
-
 import os
 import requests
 import openai
@@ -65,56 +64,4 @@ def telegram_webhook():
     elif text:
         meal_type = text.strip()
 
-    if photos:
-        file_id = photos[-1]["file_id"]
-        image_url = get_photo_url(file_id)
-        send_telegram_message(chat_id, "🧠 分析圖片中，請稍候 5 秒...")
-        food_query = vision_describe_image(image_url)
-        send_telegram_message(chat_id, f"📷 Vision 辨識結果：\n{food_query}")
-
-    if not food_query:
-        send_telegram_message(chat_id, "⚠️ 請提供食物描述文字或圖片。")
-        return jsonify({"status": "no_query"}), 200
-
-    nutrition = call_nutritionix(food_query)
-
-    summary_lines = []
-    total_calories = 0
-    for item in nutrition["foods"]:
-        name = item["food_name"]
-        kcal = item["nf_calories"]
-        protein = item["nf_protein"]
-        fat = item["nf_total_fat"]
-        carb = item["nf_total_carbohydrate"]
-        sodium = item["nf_sodium"]
-        total_calories += kcal
-        summary_lines.append(f"{name}：{round(kcal)} kcal，蛋白質 {round(protein)}g，脂肪 {round(fat)}g，碳水 {round(carb)}g")
-
-    reply_text = f"✅ 餐別：{meal_type}
-" +                  "
-".join(summary_lines) +                  f"
-
-總熱量：約 {round(total_calories)} kcal"
-
-    send_telegram_message(chat_id, reply_text)
-
-    for item in nutrition["foods"]:
-        requests.post(GSHEET_WEBHOOK_URL, json={
-            "date": "",
-            "meal_type": meal_type,
-            "food_name": item["food_name"],
-            "serving": f"{item['serving_qty']} {item['serving_unit']}",
-            "calories": item["nf_calories"],
-            "protein": item["nf_protein"],
-            "fat": item["nf_total_fat"],
-            "carbs": item["nf_total_carbohydrate"],
-            "sodium": item["nf_sodium"],
-            "source": "GPT Vision + Nutritionix",
-            "note": "由照片估算"
-        })
-
-    return jsonify({"status": "ok"}), 200
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    if
